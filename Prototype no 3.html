@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>B2B SaaS Architecture — Reliability-First</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0b0d11;
+    --bg2:       #12151b;
+    --bg3:       #181c25;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8eaf0;
+    --muted:     #7a7f8e;
+    --dim:       #4a4f5e;
+
+    --teal:      #2dd4bf;
+    --teal-bg:   rgba(45,212,191,0.08);
+    --teal-bd:   rgba(45,212,191,0.25);
+
+    --purple:    #a78bfa;
+    --purple-bg: rgba(167,139,250,0.08);
+    --purple-bd: rgba(167,139,250,0.25);
+
+    --blue:      #60a5fa;
+    --blue-bg:   rgba(96,165,250,0.08);
+    --blue-bd:   rgba(96,165,250,0.25);
+
+    --amber:     #fbbf24;
+    --amber-bg:  rgba(251,191,36,0.08);
+    --amber-bd:  rgba(251,191,36,0.25);
+
+    --coral:     #fb7185;
+    --coral-bg:  rgba(251,113,133,0.08);
+    --coral-bd:  rgba(251,113,133,0.25);
+
+    --green:     #4ade80;
+    --green-bg:  rgba(74,222,128,0.08);
+    --green-bd:  rgba(74,222,128,0.25);
+
+    --gray-bg:   rgba(255,255,255,0.04);
+    --gray-bd:   rgba(255,255,255,0.1);
+
+    --panel-w:   460px;
+    --radius:    10px;
+  }
+
+  html, body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 36px 48px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .header-left h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #fff;
+  }
+  .header-left p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .badge-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+  .badge-teal   { background: var(--teal-bg);   color: var(--teal);   border: 1px solid var(--teal-bd); }
+  .badge-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid var(--purple-bd); }
+  .badge-coral  { background: var(--coral-bg);  color: var(--coral);  border: 1px solid var(--coral-bd); }
+
+  /* ── LAYOUT ── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr var(--panel-w);
+    min-height: calc(100vh - 100px);
+  }
+
+  /* ── DIAGRAM COLUMN ── */
+  .diagram-col {
+    padding: 36px 40px 48px;
+    border-right: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .arch {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-width: 560px;
+  }
+
+  /* ── LAYERS ── */
+  .layer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .layer-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 8px;
+    padding-left: 2px;
+  }
+
+  /* ── SINGLE-ROW BLOCK ── */
+  .block {
+    border-radius: var(--radius);
+    padding: 14px 20px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: border-color 0.18s, background 0.18s, transform 0.12s;
+    position: relative;
+  }
+  .block:hover { transform: translateY(-1px); }
+  .block.active { outline: 2px solid; outline-offset: 2px; }
+
+  .block-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+  .block-sub {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* color variants */
+  .gray   { background: var(--gray-bg);   border-color: var(--gray-bd); }
+  .gray   .block-title { color: var(--text); }
+  .gray:hover { border-color: rgba(255,255,255,0.2); }
+
+  .teal   { background: var(--teal-bg);   border-color: var(--teal-bd); }
+  .teal   .block-title { color: var(--teal); }
+  .teal:hover   { border-color: var(--teal); }
+  .teal.active  { outline-color: var(--teal); }
+
+  .purple { background: var(--purple-bg); border-color: var(--purple-bd); }
+  .purple .block-title { color: var(--purple); }
+  .purple:hover { border-color: var(--purple); }
+  .purple.active { outline-color: var(--purple); }
+
+  .blue   { background: var(--blue-bg);   border-color: var(--blue-bd); }
+  .blue   .block-title { color: var(--blue); }
+  .blue:hover   { border-color: var(--blue); }
+  .blue.active  { outline-color: var(--blue); }
+
+  .amber  { background: var(--amber-bg);  border-color: var(--amber-bd); }
+  .amber  .block-title { color: var(--amber); }
+  .amber:hover  { border-color: var(--amber); }
+  .amber.active { outline-color: var(--amber); }
+
+  .coral  { background: var(--coral-bg);  border-color: var(--coral-bd); }
+  .coral  .block-title { color: var(--coral); }
+  .coral:hover  { border-color: var(--coral); }
+  .coral.active { outline-color: var(--coral); }
+
+  .green  { background: var(--green-bg);  border-color: var(--green-bd); }
+  .green  .block-title { color: var(--green); }
+  .green:hover  { border-color: var(--green); }
+  .green.active { outline-color: var(--green); }
+
+  /* ── SERVICE ROW ── */
+  .service-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  /* ── PATTERN ROW ── */
+  .pattern-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .pattern-row .block {
+    padding: 12px 14px;
+  }
+  .pattern-row .block-title { font-size: 12px; }
+  .pattern-row .block-sub   { font-size: 11px; }
+
+  /* ── CONNECTOR ── */
+  .connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    color: var(--dim);
+  }
+  .connector svg { width: 16px; height: 16px; }
+  .connector-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.5px;
+    margin: 0 8px;
+  }
+
+  /* ── DEPLOYMENT BOX ── */
+  .deploy-box {
+    border: 1px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.015);
+  }
+  .deploy-box .block-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .deploy-metrics {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .metric-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--teal);
+  }
+  .metric-lbl {
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  /* ── DETAIL PANEL ── */
+  .detail-panel {
+    padding: 36px 32px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .panel-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    text-align: center;
+    gap: 12px;
+    opacity: 0.4;
+  }
+  .panel-hint svg { width: 32px; height: 32px; color: var(--muted); }
+  .panel-hint p { font-size: 13px; color: var(--muted); max-width: 200px; }
+
+  .panel-content { display: none; flex-direction: column; gap: 0; }
+  .panel-content.visible { display: flex; }
+
+  .panel-back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 24px;
+    letter-spacing: 0.5px;
+    transition: color 0.15s;
+  }
+  .panel-back:hover { color: var(--text); }
+
+  .panel-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.2;
+    margin-bottom: 14px;
+  }
+  .panel-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 24px;
+  }
+
+  .panel-section-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .check-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .check-icon svg { width: 10px; height: 10px; }
+
+  .tech-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+  .tech-chip {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    color: var(--muted);
+  }
+
+  .warning-box {
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+  }
+  .warning-box.amber-w {
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-bd);
+    color: #d97706;
+  }
+  .warning-box.blue-w {
+    background: var(--blue-bg);
+    border: 1px solid var(--blue-bd);
+    color: var(--blue);
+  }
+  .warning-box strong { font-weight: 500; display: block; margin-bottom: 2px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .detail-panel { position: static; height: auto; border-top: 1px solid var(--border); border-right: none; }
+    header { padding: 24px 20px 20px; }
+    .diagram-col { padding: 24px 20px; }
+    .pattern-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>B2B SaaS Architecture</h1>
+    <p>Reliability-first design · Click any component to explore</p>
+  </div>
+  <div class="badge-row">
+    <span class="badge badge-teal">Multi-region</span>
+    <span class="badge badge-purple">Fault-tolerant</span>
+    <span class="badge badge-coral">RTO &lt; 15 min</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- ── DIAGRAM COLUMN ── -->
+  <div class="diagram-col">
+    <div class="arch">
+
+      <!-- CLIENT -->
+      <div class="layer">
+        <div class="layer-label">01 — Client layer</div>
+        <div class="block gray" data-id="client" onclick="showPanel('client')">
+          <div class="block-title">Client apps</div>
+          <div class="block-sub">Web app (React / Next.js) &nbsp;·&nbsp; Mobile (iOS / Android) &nbsp;·&nbsp; Desktop (Electron)</div>
+        </div>
+      </div>
+
+      <div class="connector">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><polyline points="4,10 8,14 12,10"/></svg>
+      </div>
+
+      <!-- EDGE -->
+      <div class="layer">
+        <div class="layer-label">02 — Edge layer</div>
+        <div class="block teal" data-id="edge" onclick="showPanel('edge')">
+          <div class="block-title">CDN + Global load balancer</div>
+          <div class="block-sub">Static asset caching &nbsp;·&nbsp; DDoS protection &nbsp;·&nbsp; TLS termination &nbsp;·&nbsp; Multi-region anycast routing</div>
+        </div>
+      </div>
+
+      <div class="connector">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><polyline points="4,10 8,14 12,10"/></svg>
+      </div>
+
+      <!-- API GATEWAY -->
+      <div class="layer">
+        <div class="layer-label">03 — API gateway (active–active)</div>
+        <div class="block purple" data-id="gateway" onclick="showPanel('gateway')">
+          <div class="block-title">API gateway</div>
+          <div class="block-sub">Auth / JWT validation &nbsp;·&nbsp; Rate limiting &nbsp;·&nbsp; Circuit breaker &nbsp;·&nbsp; Request routing &nbsp;·&nbsp; Canary deployments &nbsp;·&nbsp; Health-check failover</div>
+        </div>
+      </div>
+
+      <div class="connector">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><polyline points="4,10 8,14 12,10"/></svg>
+        <span class="connector-label">routes to</span>
+      </div>
+
+      <!-- CORE SERVICES -->
+      <div class="layer">
+        <div class="layer-label">04 — Core services (stateless · independently deployable)</div>
+        <div class="service-row">
+          <div class="block blue" data-id="auth" onclick="showPanel('auth')">
+            <div class="block-title">User &amp; auth</div>
+            <div class="block-sub">SSO, RBAC, sessions<br>Multi-tenant isolation</div>
+          </div>
+          <div class="block blue" data-id="domain" onclick="showPanel('domain')">
+            <div class="block-title">Core domain</div>
+            <div class="block-sub">Business logic, workflows<br>Idempotent operations</div>
+          </div>
+          <div class="block blue" data-id="notif" onclick="showPanel('notif')">
+            <div class="block-title">Notifications</div>
+            <div class="block-sub">Email, in-app, webhooks<br>Dead-letter queues</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><polyline points="4,10 8,14 12,10"/></svg>
+        <span class="connector-label">async events</span>
+      </div>
+
+      <!-- EVENT BUS -->
+      <div class="layer">
+        <div class="layer-label">05 — Async messaging</div>
+        <div class="block amber" data-id="queue" onclick="showPanel('queue')">
+          <div class="block-title">Event bus (Kafka / SQS)</div>
+          <div class="block-sub">At-least-once delivery &nbsp;·&nbsp; Dead-letter queues &nbsp;·&nbsp; Replay on incident &nbsp;·&nbsp; Decouples services from each other</div>
+        </div>
+      </div>
+
+      <div class="connector">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><polyline points="4,10 8,14 12,10"/></svg>
+      </div>
+
+      <!-- DATA LAYER -->
+      <div class="layer">
+        <div class="layer-label">06 — Data layer (all with automated failover)</div>
+        <div class="service-row">
+          <div class="block coral" data-id="db" onclick="showPanel('db')">
+            <div class="block-title">Primary DB</div>
+            <div class="block-sub">PostgreSQL, multi-AZ<br>Read replicas</div>
+          </div>
+          <div class="block coral" data-id="cache" onclick="showPanel('cache')">
+            <div class="block-title">Cache</div>
+            <div class="block-sub">Redis cluster (Sentinel)<br>Sessions + hot data</div>
+          </div>
+          <div class="block coral" data-id="storage" onclick="showPanel('storage')">
+            <div class="block-title">Object storage</div>
+            <div class="block-sub">S3-compatible, versioned<br>Cross-region replication</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="2" x2="8" y2="14"/><polyline points="4,10 8,14 12,10"/></svg>
+      </div>
+
+      <!-- OBSERVABILITY -->
+      <div class="layer">
+        <div class="layer-label">07 — Observability &amp; reliability ops</div>
+        <div class="block green" data-id="obs" onclick="showPanel('obs')">
+          <div class="block-title">Observability stack</div>
+          <div class="block-sub">Distributed tracing (OpenTelemetry) &nbsp;·&nbsp; Structured logs (Loki / CloudWatch) &nbsp;·&nbsp; Metrics + SLO alerts (Prometheus / Grafana) &nbsp;·&nbsp; On-call runbooks</div>
+        </div>
+      </div>
+
+      <div class="connector" style="height:20px"></div>
+
+      <!-- RELIABILITY PATTERNS -->
+      <div class="layer">
+        <div class="layer-label">08 — Fault tolerance patterns</div>
+        <div class="pattern-row">
+          <div class="block purple" data-id="cb" onclick="showPanel('cb')">
+            <div class="block-title">Circuit breaker</div>
+            <div class="block-sub">Fail fast, auto-recover</div>
+          </div>
+          <div class="block purple" data-id="bh" onclick="showPanel('bh')">
+            <div class="block-title">Bulkhead isolation</div>
+            <div class="block-sub">Contain blast radius</div>
+          </div>
+          <div class="block purple" data-id="gd" onclick="showPanel('gd')">
+            <div class="block-title">Graceful degradation</div>
+            <div class="block-sub">Read-only fallback</div>
+          </div>
+          <div class="block purple" data-id="retry" onclick="showPanel('retry')">
+            <div class="block-title">Retry + backoff</div>
+            <div class="block-sub">Jitter, avoid stampedes</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector" style="height:20px"></div>
+
+      <!-- DEPLOYMENT -->
+      <div class="deploy-box">
+        <div class="block-title">Deployment &amp; recovery targets</div>
+        <div class="block-sub">Kubernetes (EKS / GKE) &nbsp;·&nbsp; Blue-green + canary deployments &nbsp;·&nbsp; Automated rollback on p95 latency breach or error-rate spike</div>
+        <div class="deploy-metrics">
+          <div class="metric"><span class="metric-val">&lt; 15 min</span><span class="metric-lbl">RTO</span></div>
+          <div class="metric"><span class="metric-val">&lt; 5 min</span><span class="metric-lbl">RPO</span></div>
+          <div class="metric"><span class="metric-val">99.9%</span><span class="metric-lbl">Uptime SLA</span></div>
+          <div class="metric"><span class="metric-val">Multi-AZ</span><span class="metric-lbl">Minimum HA</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── DETAIL PANEL ── -->
+  <div class="detail-panel">
+    <div class="panel-hint" id="panel-hint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <p>Click any component to explore its details and design rationale.</p>
+    </div>
+    <div class="panel-content" id="panel-content">
+      <button class="panel-back" onclick="closePanel()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="10" y1="6" x2="2" y2="6"/><polyline points="5,3 2,6 5,9"/></svg>
+        BACK TO OVERVIEW
+      </button>
+      <div class="panel-tag" id="p-tag"></div>
+      <div class="panel-title" id="p-title"></div>
+      <div class="panel-desc" id="p-desc"></div>
+      <div id="p-extra"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const data = {
+  client: {
+    tag: "Layer 01 · Client", color: "#7a7f8e",
+    title: "Client applications",
+    desc: "The entry point for your users. Designed to be thin — business logic lives server-side so the client stays fast, deployable, and cacheable.",
+    checks: [
+      "Next.js for web: SSR for fast first load, SWR/React Query for cache-first data fetching",
+      "Optimistic UI updates keep perceived latency low even on slow connections",
+      "Offline-capable PWA with local queue for deferred sync",
+      "Token refresh handled silently; expired sessions redirect cleanly to login",
+      "Electron wrapper for desktop reuses the same React codebase"
+    ],
+    tech: ["React 18", "Next.js 14", "React Query", "Zustand", "Tauri / Electron", "Capacitor"],
+    note: { type: "blue-w", title: "Design principle", body: "Never put business logic in the client. Any logic that lives in the browser can be bypassed or reverse-engineered." }
+  },
+  edge: {
+    tag: "Layer 02 · Edge", color: "#2dd4bf",
+    title: "CDN + global load balancer",
+    desc: "The first line of defense for reliability. Traffic lands at the nearest PoP, is filtered for malicious patterns, and is routed to the healthiest origin region.",
+    checks: [
+      "Static assets (JS, CSS, images) cached at the edge — zero origin hits for repeat loads",
+      "Anycast routing: users automatically route to closest healthy region",
+      "DDoS mitigation at layer 3/4 and layer 7 (WAF rules for SQLi, XSS, rate abuse)",
+      "TLS termination at edge; internal traffic over private network",
+      "Geo-blocking and IP allowlisting per tenant for enterprise customers"
+    ],
+    tech: ["Cloudflare / AWS CloudFront", "AWS Global Accelerator", "WAF", "Shield"],
+    note: { type: "amber-w", title: "Reliability impact", body: "A CDN provider outage is rare but catastrophic. Always have a secondary CDN configured and ready to activate via DNS failover within minutes." }
+  },
+  gateway: {
+    tag: "Layer 03 · Gateway", color: "#a78bfa",
+    title: "API gateway",
+    desc: "The single ingress point for all API traffic. This is where cross-cutting concerns live so individual services stay clean.",
+    checks: [
+      "JWT validation on every request — services never trust caller identity directly",
+      "Per-tenant rate limiting protects noisy-neighbour scenarios",
+      "Circuit breaker: trips when a downstream service exceeds error threshold, returns cached/degraded response",
+      "Active-active multi-region: requests route to the healthy region automatically",
+      "Canary routing: new service versions receive 5% → 20% → 100% of traffic with auto-rollback on SLO breach"
+    ],
+    tech: ["AWS API Gateway", "Kong", "Envoy", "Nginx", "AWS WAF"],
+    note: { type: "blue-w", title: "Active-active setup", body: "Run gateway instances in at least 2 regions. Route via DNS health checks so failover is automatic and requires no manual intervention." }
+  },
+  auth: {
+    tag: "Layer 04 · Service", color: "#60a5fa",
+    title: "User & auth service",
+    desc: "Handles identity, access control, and session management across all tenants. The most security-sensitive service in the stack.",
+    checks: [
+      "SAML / OIDC SSO for enterprise customers (Okta, Azure AD, Google Workspace)",
+      "RBAC with org-level, team-level, and resource-level permissions",
+      "JWT short-lived (15 min) + refresh tokens (7 days), rotated on use",
+      "Hard tenant isolation: every DB query scoped by tenant_id with RLS policies",
+      "Audit log of every auth event, immutable, forwarded to SIEM"
+    ],
+    tech: ["Auth0 / Clerk", "PostgreSQL RLS", "Redis sessions", "JWKS endpoint"],
+    note: { type: "amber-w", title: "Multi-tenancy caution", body: "Row-level security in PostgreSQL is the lowest-risk isolation mechanism — add it at the DB level, not just in application code, so no accidental cross-tenant query is possible." }
+  },
+  domain: {
+    tag: "Layer 04 · Service", color: "#60a5fa",
+    title: "Core domain service",
+    desc: "Where your product's value lives. Designed for idempotency and horizontal scaling so it can be retried and replicated without side effects.",
+    checks: [
+      "All write operations are idempotent via client-generated idempotency keys",
+      "Command/event separation: writes emit domain events onto the bus for downstream consumers",
+      "Optimistic locking on critical resources prevents double-writes under concurrency",
+      "Feature flags at the service layer for safe rollouts without deployments",
+      "Background jobs (cron, bulk ops) run in a separate worker pool — never blocking API threads"
+    ],
+    tech: ["Node.js / Go / Python", "PostgreSQL", "Redis", "Temporal (workflows)"],
+    note: { type: "blue-w", title: "Idempotency is non-negotiable", body: "If a write can be retried safely, it can recover from network failures, duplicate deliveries, and partial failures automatically." }
+  },
+  notif: {
+    tag: "Layer 04 · Service", color: "#60a5fa",
+    title: "Notifications service",
+    desc: "Decoupled from core business logic so a slow email provider never affects product responsiveness.",
+    checks: [
+      "Consumes domain events from the event bus — never called synchronously by other services",
+      "Dead-letter queue: failed deliveries are retried with exponential backoff, then parked for inspection",
+      "Multi-channel: in-app, email (SES), push (FCM/APNs), Slack/Teams webhooks",
+      "Per-user preferences respected at delivery time, not at event generation",
+      "Digest mode: batch low-priority events to prevent inbox flooding"
+    ],
+    tech: ["AWS SES / SendGrid", "FCM / APNs", "Twilio", "Redis pub/sub"],
+    note: { type: "amber-w", title: "Never call synchronously", body: "Fire notifications via the event bus, not direct HTTP. If the notification service is down, your core workflow should complete normally." }
+  },
+  queue: {
+    tag: "Layer 05 · Messaging", color: "#fbbf24",
+    title: "Async event bus",
+    desc: "The backbone of service decoupling. Ensures reliability even when downstream consumers are temporarily unavailable.",
+    checks: [
+      "At-least-once delivery guaranteed — consumers must be idempotent",
+      "Dead-letter queue for events that fail after N retries — never silently dropped",
+      "Replay capability: re-process events from a timestamp to recover from downstream bugs",
+      "Consumer groups for independent scaling of each service",
+      "Schema registry prevents breaking changes to event contracts"
+    ],
+    tech: ["Apache Kafka", "AWS SQS + SNS", "AWS EventBridge", "Confluent Schema Registry"],
+    note: { type: "blue-w", title: "Exactly-once is a myth", body: "Design every consumer to handle duplicate messages gracefully. Use a processed_events table or idempotency key store to deduplicate." }
+  },
+  db: {
+    tag: "Layer 06 · Data", color: "#fb7185",
+    title: "Primary database (PostgreSQL)",
+    desc: "The source of truth. Multi-AZ deployment ensures automatic failover with minimal data loss.",
+    checks: [
+      "Multi-AZ with synchronous replication to standby — automatic failover in ~60 seconds",
+      "Read replicas in each region offload reporting and search queries",
+      "Point-in-time recovery (PITR) enabled — restore to any second within retention window",
+      "Row-level security enforces tenant isolation at the database layer",
+      "Connection pooling (PgBouncer) prevents connection exhaustion under load"
+    ],
+    tech: ["PostgreSQL 16", "AWS RDS Multi-AZ", "PgBouncer", "pgvector (search)"],
+    note: { type: "amber-w", title: "Schema migrations", body: "Always use expand-contract migrations. Never drop or rename a column in the same deploy as the code change — decouple them by at least one release cycle." }
+  },
+  cache: {
+    tag: "Layer 06 · Data", color: "#fb7185",
+    title: "Cache (Redis cluster)",
+    desc: "Reduces database load and keeps hot-path latency in single-digit milliseconds.",
+    checks: [
+      "Redis Sentinel for automatic leader election and failover",
+      "Separate logical databases for sessions, hot data, and rate-limit counters",
+      "TTLs on all keys — never set a key without an expiry",
+      "Cache-aside pattern: read from cache, fallback to DB on miss, populate on read",
+      "Stampede protection: use mutex lock on cache miss to prevent thundering herd"
+    ],
+    tech: ["Redis 7", "AWS ElastiCache", "Redis Sentinel", "ioredis"],
+    note: { type: "blue-w", title: "Never use cache as source of truth", body: "Cache can be evicted at any time. Always be able to reconstruct it from the database. Session data is the one exception — store it durably." }
+  },
+  storage: {
+    tag: "Layer 06 · Data", color: "#fb7185",
+    title: "Object storage",
+    desc: "Durable, infinitely scalable storage for files, exports, and user-generated content.",
+    checks: [
+      "S3 versioning enabled — accidental deletes are recoverable",
+      "Cross-region replication for disaster recovery",
+      "Pre-signed URLs for client direct upload — never proxy files through your API servers",
+      "Lifecycle policies: move cold objects to cheaper storage tiers after 90 days",
+      "Per-tenant path prefix enforced in IAM policies for hard isolation"
+    ],
+    tech: ["AWS S3", "Cloudflare R2", "MinIO (self-hosted option)"],
+    note: { type: "amber-w", title: "Block public access by default", body: "All buckets should deny public access at the account level. Serve files via pre-signed URLs or a CDN with signed cookies — never expose raw S3 URLs to users." }
+  },
+  obs: {
+    tag: "Layer 07 · Observability", color: "#4ade80",
+    title: "Observability stack",
+    desc: "Without this layer, you're flying blind. Designed around SLOs rather than raw metrics so alerting reflects real customer impact.",
+    checks: [
+      "Distributed traces (OpenTelemetry) connect a slow API call across all services in one view",
+      "SLO-based alerting: alert on error budget burn rate, not raw error counts",
+      "Structured JSON logs with trace_id, tenant_id, and user_id on every line",
+      "Synthetic uptime monitoring from multiple regions catches issues before users do",
+      "Runbook linked from every alert — on-call engineer never starts from scratch"
+    ],
+    tech: ["OpenTelemetry", "Prometheus", "Grafana", "Loki", "PagerDuty", "Datadog"],
+    note: { type: "blue-w", title: "The four golden signals", body: "Instrument every service for: Latency (p50, p95, p99), Traffic (req/s), Errors (4xx/5xx rate), and Saturation (CPU, memory, queue depth)." }
+  },
+  cb: {
+    tag: "Pattern · Resilience", color: "#a78bfa",
+    title: "Circuit breaker",
+    desc: "Prevents a slow or failing downstream service from cascading failures up through your stack.",
+    checks: [
+      "Closed state: requests pass through normally, failures counted",
+      "Open state: trips when failure threshold exceeded — returns cached/degraded response immediately",
+      "Half-open state: after timeout, allows one probe request to test recovery",
+      "Configured per-service: a slow payment provider shouldn't affect your core product",
+      "Metrics exposed: current state, failure rate, last trip time"
+    ],
+    tech: ["Resilience4j", "Polly (.NET)", "Hystrix", "Envoy outlier detection"],
+    note: { type: "blue-w", title: "Pair with fallbacks", body: "A circuit breaker without a fallback just moves your 500 error earlier. Always define what the degraded response looks like: cached data, empty state, or a clear user message." }
+  },
+  bh: {
+    tag: "Pattern · Resilience", color: "#a78bfa",
+    title: "Bulkhead isolation",
+    desc: "Named after ship bulkheads — partition resources so a failure in one area can't sink the whole ship.",
+    checks: [
+      "Separate thread pools per service dependency — a slow DB pool can't starve the cache pool",
+      "Separate Kubernetes namespaces and resource quotas per service team",
+      "Dedicated database connection pool for background jobs vs. API requests",
+      "Rate limits per tenant prevent one large customer from affecting others",
+      "Network policies restrict which services can communicate with each other"
+    ],
+    tech: ["Kubernetes ResourceQuota", "HPA", "Resilience4j Bulkhead", "Istio"],
+    note: { type: "amber-w", title: "Key insight", body: "Bulkheads accept that partial failure will happen. The goal is ensuring one bad tenant or one slow dependency cannot cause a system-wide outage." }
+  },
+  gd: {
+    tag: "Pattern · Resilience", color: "#a78bfa",
+    title: "Graceful degradation",
+    desc: "When a dependency fails, serve a reduced but functional experience rather than a total outage.",
+    checks: [
+      "Read-only mode when write DB is unavailable — users can still view data",
+      "Feature flags disable non-critical features (analytics, AI suggestions) under load",
+      "Stale cache served when origin is down, with a banner informing users",
+      "Queue writes to local storage and sync when connectivity restores",
+      "Status page updated automatically when degraded mode activates"
+    ],
+    tech: ["LaunchDarkly / Unleash", "Redis stale-while-revalidate", "Service workers"],
+    note: { type: "blue-w", title: "Map your fallbacks now", body: "For every external dependency, answer: 'what does the product do when this is unavailable?' — before you need to answer it at 2am during an incident." }
+  },
+  retry: {
+    tag: "Pattern · Resilience", color: "#a78bfa",
+    title: "Retry with exponential backoff",
+    desc: "Automatic recovery from transient failures without overwhelming a struggling service.",
+    checks: [
+      "Exponential backoff: wait 1s → 2s → 4s → 8s between retries (max cap ~30s)",
+      "Jitter: randomise wait time ±30% to prevent thundering herd on recovery",
+      "Retry only on retryable errors: network timeouts, 429, 503 — never retry 400 or 422",
+      "Max retry count enforced — don't retry indefinitely, push to DLQ after N attempts",
+      "Idempotency keys on all mutating operations so retries are safe"
+    ],
+    tech: ["Resilience4j Retry", "AWS SDK built-in retry", "axios-retry", "tenacity (Python)"],
+    note: { type: "amber-w", title: "Jitter is not optional", body: "Without jitter, all clients backed off at the same time retry at the same time — creating a retry storm that prevents recovery. Always add randomisation." }
+  }
+};
+
+let active = null;
+
+function showPanel(id) {
+  const d = data[id];
+  if (!d) return;
+
+  if (active) {
+    const prev = document.querySelector(`[data-id="${active}"]`);
+    if (prev) prev.classList.remove('active');
+  }
+  active = id;
+  const el = document.querySelector(`[data-id="${id}"]`);
+  if (el) el.classList.add('active');
+
+  document.getElementById('panel-hint').style.display = 'none';
+  const pc = document.getElementById('panel-content');
+  pc.classList.add('visible');
+
+  document.getElementById('p-tag').textContent = d.tag;
+  document.getElementById('p-tag').style.color = d.color;
+  document.getElementById('p-title').textContent = d.title;
+  document.getElementById('p-desc').textContent = d.desc;
+
+  let extra = '';
+
+  // Checklist
+  extra += `<div class="panel-section-title">What to implement</div>`;
+  extra += `<div class="checklist">`;
+  for (const c of d.checks) {
+    extra += `<div class="check-item">
+      <div class="check-icon" style="background:${d.color}20;border:1px solid ${d.color}40">
+        <svg viewBox="0 0 10 10" fill="none" stroke="${d.color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,5 4,7 8,3"/></svg>
+      </div>
+      <span>${c}</span>
+    </div>`;
+  }
+  extra += `</div>`;
+
+  // Tech stack
+  if (d.tech) {
+    extra += `<div class="panel-section-title">Technology options</div>`;
+    extra += `<div class="tech-chips">`;
+    for (const t of d.tech) {
+      extra += `<span class="tech-chip">${t}</span>`;
+    }
+    extra += `</div>`;
+  }
+
+  // Note
+  if (d.note) {
+    extra += `<div class="warning-box ${d.note.type}"><strong>${d.note.title}</strong>${d.note.body}</div>`;
+  }
+
+  document.getElementById('p-extra').innerHTML = extra;
+
+  // Scroll panel to top
+  document.querySelector('.detail-panel').scrollTop = 0;
+}
+
+function closePanel() {
+  document.getElementById('panel-hint').style.display = '';
+  document.getElementById('panel-content').classList.remove('visible');
+  if (active) {
+    const el = document.querySelector(`[data-id="${active}"]`);
+    if (el) el.classList.remove('active');
+    active = null;
+  }
+}
+</script>
+</body>
+</html>
